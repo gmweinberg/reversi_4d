@@ -1,4 +1,59 @@
 const sumArray= (numbers) => numbers.reduce((acc, curr) => acc + curr, 0);
+
+function getAllStrideSums(strides) {
+    const results = [];
+
+    // For each subset size (1 through n elements)
+    for (let size = 1; size <= strides.length; size++) {
+        // Get all combinations of that size
+        const combinations = getCombinations(strides, size);
+
+        // For each combination, generate all possible sign combinations
+        combinations.forEach(combo => {
+            const signCombinations = getAllSignCombinations(combo.length);
+
+            signCombinations.forEach(signs => {
+                const sum = combo.reduce((acc, val, i) => acc + (signs[i] * val), 0);
+                results.push(sum);
+            });
+        });
+    }
+
+    return results;
+}
+
+// Generate all possible combinations of +1 and -1 for n positions
+function getAllSignCombinations(n) {
+    const results = [];
+    const totalCombinations = Math.pow(2, n);
+
+    for (let i = 0; i < totalCombinations; i++) {
+        const signs = [];
+        for (let j = 0; j < n; j++) {
+            // Use bit manipulation to determine sign
+            signs.push((i & (1 << j)) ? -1 : 1);
+        }
+        results.push(signs);
+    }
+
+    return results;
+}
+// Helper function to get all combinations of size k from array
+function getCombinations(arr, k) {
+    if (k === 1) return arr.map(x => [x]);
+    if (k === arr.length) return [arr];
+
+    const combinations = [];
+
+    for (let i = 0; i <= arr.length - k; i++) {
+        const first = arr[i];
+        const rest = getCombinations(arr.slice(i + 1), k - 1);
+        rest.forEach(combo => combinations.push([first, ...combo]));
+    }
+
+    return combinations;
+}
+
 function other_player(pom){
 		if (pow == 'w') {
 				return 'b';
@@ -6,12 +61,13 @@ function other_player(pom){
 		return 'w';
 }
 
-function grid_pos(straight_strides, y1, y2, x1, x2){
-    return y1 * straight_strides[3] + y2 * straight_strides[2] + x1 * straight_strides[1] + x2;
+function grid_pos(y1, y2, x1, x2){
+	const strides = the_game.spec.straight_strides;
+    return y1 * strides[3] + y2 * strides[2] + x1 * strides[1] + x2;
 }
 
 function pos_coords(the_game, pos){ // most significant to least significant
-	const strides = the_game.straight_strides;
+	const strides = the_game.spec.straight_strides;
     let x1, x2, y1, y2;
     y1 = Math.floor(pos/strides[3]);
     pos -= y1 * strides[3];
@@ -22,36 +78,77 @@ function pos_coords(the_game, pos){ // most significant to least significant
     x2 = pos;
     return [y1, y2, x1, x2];
 }
+// Find all captures that can be made by placing a disk at the specified position.
+// captures are specied by a list of tupls (direction, length)
+// return the list and a new grid with the captures made. 
+// If there are no captures (or the square is occupied) the move is illegal.
 
+function get_captures(spec, grid, pos, pom) {
+	const captures = [];
+	const ng = [...grid];
+	if (grid[pos] != '') {
+		return [captures, ng]; //occupied
+	}
+		//this.straight_strides.forEach((element) => this.grid[piece0 + element] = 'b');
+    getAllStrideSums(spec.straight_strides).forEach((stride) =>{
+		let dpc = 0; //direction possible captures
+		let pos1 = pos;
+		while (pos1 >= 0 && pos1 < spec.total){
+			if (grid[pos1] == pom){
+				if (dpc > 0){
+					captures.push([stride, dpc]);
+					for (let i = 1; i<= dpc; i++){
+						ng[stride * i] = pom;
+					}
+				}
+				break;
+			} else if (grid[pos1] == other_player(pom)){
+				dbc++;
+			} else {
+				break;
+			}
+		}
+	});
+	return [captures, ng];
+}
+
+class Spec {
+	constructor(size){
+	    this.size = size; //along one axis
+		this.total = Math.pow(size, 4);
+		this.straight_strides = [1, size, size * size, size * size * size];
+	}
+}
 
 class GameState {
-		constructor(mode, size){
-			this.size = size;
-			this.grid = Array(size * size * size * size).fill('');
-			this.straight_strides = [1, size, size * size, size * size * size];
-			const strides = this.straight_strides;
-			// put in initial pieces
-			const piece0 = sumArray(strides) * (size / 2 - 1);
-			this.grid[piece0] = 'w';
-			this.straight_strides.forEach((element) => this.grid[piece0 + element] = 'b');
-			this.grid[piece0 + strides[0] + strides[1]] = 'w';
-			this.grid[piece0 + strides[0] + strides[2]] = 'w';
-			this.grid[piece0 + strides[0] + strides[3]] = 'w';
-			this.grid[piece0 + strides[1] + strides[2]] = 'w';
-			this.grid[piece0 + strides[1] + strides[3]] = 'w';
-			this.grid[piece0 + strides[2] + strides[3]] = 'w';
-			this.grid[piece0 + sumArray(strides)] = 'w';
-			this.grid[piece0 + strides[0] + strides[1] + strides[2]] = 'b';
-			this.grid[piece0 + strides[0] + strides[1] + strides[3]] = 'b';
-			this.grid[piece0 + strides[0] + strides[2] + strides[3]] = 'b';
-			this.grid[piece0 + strides[1] + strides[2] + strides[3]] = 'b';
+	constructor(mode, size){
+		this.mode = mode;
+		this.done = false;
+		this.spec = new Spec(size);
+		this.grid = Array(size * size * size * size).fill('');
+		const strides = this.spec.straight_strides;
+		// put in initial pieces
+		const piece0 = sumArray(strides) * (size / 2 - 1);
+		this.grid[piece0] = 'w';
+		strides.forEach((element) => this.grid[piece0 + element] = 'b');
+		this.grid[piece0 + strides[0] + strides[1]] = 'w';
+		this.grid[piece0 + strides[0] + strides[2]] = 'w';
+		this.grid[piece0 + strides[0] + strides[3]] = 'w';
+		this.grid[piece0 + strides[1] + strides[2]] = 'w';
+		this.grid[piece0 + strides[1] + strides[3]] = 'w';
+		this.grid[piece0 + strides[2] + strides[3]] = 'w';
+		this.grid[piece0 + sumArray(strides)] = 'w';
+		this.grid[piece0 + strides[0] + strides[1] + strides[2]] = 'b';
+		this.grid[piece0 + strides[0] + strides[1] + strides[3]] = 'b';
+		this.grid[piece0 + strides[0] + strides[2] + strides[3]] = 'b';
+		this.grid[piece0 + strides[1] + strides[2] + strides[3]] = 'b';
 
-			this.moves = [];
-			this.pom = 'w';
-		}
-		toggle_pom() {
-            this.pom = other_player(this.pom);
-        }
+		this.moves = [];
+		this.pom = 'w';
+	}
+	toggle_pom() {
+		this.pom = other_player(this.pom);
+	}
 
 }
 
@@ -76,7 +173,7 @@ const last_move_color = "gold";
 function get_disk_center(the_game, pos){
 	coords = pos_coords(the_game, pos);
 	let [y1, y2, x1, x2] = coords;
-    const ps = pb + (the_game.size) * sqs + (the_game.size + 1) * sqb; // plane size
+    const ps = pb + (the_game.spec.size) * sqs + (the_game.spec.size + 1) * sqb; // plane size
     const x = pb + sqb + sqs / 2 + x1 * ps + (sqs + sqb) * x2;
     const y = pb + sqb + sqs / 2 + y1 * ps + (sqs + sqb) * y2;
 	//console.log('get_disk_center', pos, coords, x, y);
@@ -91,13 +188,55 @@ function circle(ctx, x, y, r){
 	ctx.fill();
 }
 
+/* find the 4 d coords of a click event if it corresponds to a square. returns the grid pos
+ * or -1 */
+
+function get_click_square(e) {
+    const ps = pb + the_game.spec.size * sqs + (the_game.spec.size + 1) * sqb; // plane size
+    const rect = canvas.getBoundingClientRect();
+    const canX = Math.floor(e.clientX - rect.left);
+    const canY = Math.floor(e.clientY - rect.top);
+    const planeX = Math.floor(canX / ps);
+    const planeY = Math.floor(canY / ps);
+    const relX = canX - (planeX * ps + pb);
+    const relY = canY - (planeY * ps + pb);
+    // console.log("relX", relX, "relY", relY);
+    if (relX < 0) {
+            return -1;
+    }
+    if (relY < 0) {
+            return -1;
+    }
+    const sqX = Math.floor(relX / (sqb + sqs));
+    const sqY = Math.floor(relY / (sqb + sqs));
+    const pos =  grid_pos( planeY, sqY, planeX, sqX);
+    // console.log("coords", planeX, sqX, planeY, sqY, pos);
+    return pos;
+}
+
+
+function handle_canvas_click(e) {
+    if (the_game.done) {
+            return;
+    }
+    if (the_game.computer_moving){
+            return;
+    }
+    if (the_game.mode == 'cvc'){
+            return;
+    }
+    pos = get_click_square(e);
+	console.log("handle_canvas_click", pos);
+}
+
 
 function redraw_canvas(){
     console.log("Called redraw_canvas", Math.random());
-	const gs = the_game.size
+	const gs = the_game.spec.size
 	const cw = pb * (gs + 1) + sqb * (gs + 1) * gs + sqs * gs * gs;
 	canvas.width = cw;
 	canvas.height = cw;
+	// console.log("cw", cw);
     const ctx = canvas.getContext("2d");
     ctx.fillStyle = square_color;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -127,10 +266,10 @@ function redraw_canvas(){
             const disk_center = get_disk_center(the_game, ii);
             ctx.fillStyle = the_game.grid[ii] == 'w' ? 'white' : 'black';
 			circle(ctx, disk_center[0], disk_center[1], diskr);
-            console.log("coords", coords,"color", the_game.grid[ii]);
+            // console.log("coords", coords,"color", the_game.grid[ii]);
         }
     }
 
 }
-
+canvas.onclick = handle_canvas_click;
 redraw_canvas();
