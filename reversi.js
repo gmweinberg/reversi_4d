@@ -55,7 +55,7 @@ function getCombinations(arr, k) {
 }
 
 function other_player(pom){
-		if (pow == 'w') {
+		if (pom == 'w') {
 				return 'b';
 		}
 		return 'w';
@@ -66,7 +66,7 @@ function grid_pos(y1, y2, x1, x2){
     return y1 * strides[3] + y2 * strides[2] + x1 * strides[1] + x2;
 }
 
-function pos_coords(the_game, pos){ // most significant to least significant
+function get_pos_coords(pos){ // most significant to least significant
 	const strides = the_game.spec.straight_strides;
     let x1, x2, y1, y2;
     y1 = Math.floor(pos/strides[3]);
@@ -83,40 +83,43 @@ function pos_coords(the_game, pos){ // most significant to least significant
 // return the list and a new grid with the captures made. 
 // If there are no captures (or the square is occupied) the move is illegal.
 
-function get_captures(spec, grid, pos, pom) {
+function get_captures(grid, pos, pom) {
+	const spec = the_game.spec;
 	const captures = [];
 	const ng = [...grid];
 	if (grid[pos] != '') {
 		return [captures, ng]; //occupied
 	}
 		//this.straight_strides.forEach((element) => this.grid[piece0 + element] = 'b');
+	ng[pos] = pom;
     getAllStrideSums(spec.straight_strides).forEach((stride) =>{
 		let dpc = 0; //direction possible captures
-		let pos1 = pos;
+		let pos1 = pos + stride;
 		while (pos1 >= 0 && pos1 < spec.total){
 			if (grid[pos1] == pom){
 				if (dpc > 0){
 					captures.push([stride, dpc]);
 					for (let i = 1; i<= dpc; i++){
-						ng[stride * i] = pom;
+						ng[pos + stride * i] = pom;
 					}
 				}
 				break;
 			} else if (grid[pos1] == other_player(pom)){
-				dbc++;
+				dpc++;
 			} else {
 				break;
 			}
+			pos1 += stride;
 		}
 	});
 	return [captures, ng];
 }
 
 class Spec {
-	constructor(size){
-	    this.size = size; //along one axis
-		this.total = Math.pow(size, 4);
-		this.straight_strides = [1, size, size * size, size * size * size];
+    constructor(size){
+        this.size = size; //along one axis
+        this.total = Math.pow(size, 4);
+        this.straight_strides = [1, size, size * size, size * size * size];
 	}
 }
 
@@ -124,8 +127,11 @@ class GameState {
 	constructor(mode, size){
 		this.mode = mode;
 		this.done = false;
+		this.winner = null;
 		this.spec = new Spec(size);
 		this.grid = Array(size * size * size * size).fill('');
+		this.last_move = -1;
+		this.last_captures = [];
 		const strides = this.spec.straight_strides;
 		// put in initial pieces
 		const piece0 = sumArray(strides) * (size / 2 - 1);
@@ -146,18 +152,46 @@ class GameState {
 		this.moves = [];
 		this.pom = 'w';
 	}
+	append_move(pos, captures, new_grid) {
+		this.last_move = pos;
+		this.last_captures = captures;
+		this.moves.push[pos, captures];
+		this.grid = new_grid;
+		the_game.toggle_pom();
+		let net = 0;
+		let done = true;
+		for (let ii=0; ii < the_game.spec.total; ii++){
+			if (the_game.grid[ii] == ''){
+				done = false;
+				break;
+			}
+			if (the_game.grid[ii] == 'w'){
+				net += 1;
+			} else {
+				net -= 1;
+			}
+		}
+		if (done){
+			this.done = true;
+			if (net > 0){
+				this.winner = 'w';
+			} else if (net < 0) {
+				this.winner =  'b';
+			} else {
+				this.winner = 'cat';
+			}
+		}
+	}
 	toggle_pom() {
 		this.pom = other_player(this.pom);
 	}
 
 }
 
-
 /* drawing the canvas */
 const canvas = document.getElementById('the_canvas');
 //const mode = document.getElementById("frm").elements["mode"].value;
-const mode = 'PVP';
-let the_game = new GameState(mode, 6);
+let the_game;
 
 const pb = 6; // boundary between planes
 const sqb = 2; // boundary between squares
@@ -170,8 +204,8 @@ const plane_boundary_color = "dodgerblue";
 const win_color = "crimson";
 const last_move_color = "gold";
 
-function get_disk_center(the_game, pos){
-	coords = pos_coords(the_game, pos);
+function get_disk_center(pos){
+	coords = get_pos_coords(pos);
 	let [y1, y2, x1, x2] = coords;
     const ps = pb + (the_game.spec.size) * sqs + (the_game.spec.size + 1) * sqb; // plane size
     const x = pb + sqb + sqs / 2 + x1 * ps + (sqs + sqb) * x2;
@@ -214,7 +248,6 @@ function get_click_square(e) {
     return pos;
 }
 
-
 function handle_canvas_click(e) {
     if (the_game.done) {
             return;
@@ -226,9 +259,132 @@ function handle_canvas_click(e) {
             return;
     }
     pos = get_click_square(e);
-	console.log("handle_canvas_click", pos);
+	const [captures, ng] = get_captures(the_game.grid, pos, the_game.pom);
+	if (captures.length === 0){
+		console.log("illegal move");
+		return;
+	}
+	console.log("captures", captures);
+	the_game.append_move(pos, captures, ng); 
+	redraw_canvas();
+	if (the_game.done) return;
+	if (the_game.mode == 'pvc'){
+			do_computer_move();
+			redraw_canvas();
+	}
+
+	// console.log("handle_canvas_click", pos);
+}
+/* evaluation score for a particular square. For now we score extra for the
+ * 16 corners and everything else is the same
+ */
+function score_pos(pos) {
+	const pos_coords = get_pos_coords(pos);
+	if (pos_coords.every(elm => elm === 0 || elm === the_game.spec.size)){
+		return 20;
+	}
+	return 1;
+}
+/* score the grod from white's point of view */
+function score_grid(grid) {
+	let total = 0;
+	for (let ii = 0; ii < the_game.spec.total; ii++){
+		if (grid[ii] == 'w'){
+			total += score_pos(ii);
+		} else if (grid[ii] == 'b'){
+			total -= score_pos[ii]; 
+		} // no score if unoccupied
+	}
+	return total;
 }
 
+function get_2ply_move(grid, pom){
+	const them = other_player(pom);
+	let alpha = -20000000000;  
+	let maxpos;
+	let them_min;
+	let ascore;
+	let tc;
+	for (let ii = 0; ii < the_game.spec.total; ii++){
+		// const [captures, ng] = get_captures(the_game.grid, pos, the_game.pom);
+		const [captures1, ng1] = get_captures(grid, ii, pom);
+		if (captures1.length===0) {
+			continue;
+		}
+		them_min = 2000000; 
+		for (let iii = 0; iii < the_game.spec.total; iii++){
+			const [captures2, ng2] = get_captures(ng1, iii, them);
+			if (captures2.length === 0){
+				continue;
+			}
+			ascore = score_grid(ng2);
+			if (pom === 'w'){
+				ascore *= -1;
+			}
+			if (ascore > them_min){
+				them_min = ascore;
+			}
+			if (ascore < alpha){
+				continue;
+			} 
+		}
+		if (them_min > alpha){
+			alpha = them_min;
+			maxpos = ii;
+			tc = captures1;
+		}
+	}
+	console.log("tc", tc);
+    return maxpos;
+
+}
+
+function resolveAfter20ms() {
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      resolve('resolved');
+    }, 20);
+  });
+}
+
+async function do_computer_move(){
+	console.log("computer moving");
+	the_game.computer_moving = true;
+	await resolveAfter20ms();
+	//const computer_move = get_random_move(the_game.grid, the_game.pom);
+	const computer_move = get_2ply_move(the_game.grid, the_game.pom); // computer_move is just pos
+	const [captures, ng] = get_captures(the_game.grid, computer_move, the_game.pom);
+	console.log("got computer move", computer_move, captures);
+	the_game.append_move(computer_move, captures, ng);
+	the_game.computer_moving = false;
+	console.log("computer moved", computer_move);
+	redraw_canvas();
+	if (the_game.mode == 'cvc'){
+			if (!the_game.done) {
+					setTimeout(do_computer_move, 1000);
+			}
+	}
+}
+
+
+
+function handle_new_game(){
+        const mode = document.getElementById("frm").elements["mode"].value;
+        const size = parseInt(document.getElementById("frm").elements["size"].value);
+        console.log("new game", mode);
+        the_game = new GameState(mode, size);
+        if (mode == "pvc"){
+            const player_color =  document.getElementById("frm").elements["color"].value;
+            if (player_color == 'b'){
+                    console.log("doing computer move.");
+                    do_computer_move();
+            }
+        } else if (mode == "cvc"){
+			console.log("not yet supported");
+            //do_computer_move();
+        }
+        redraw_canvas();
+}
 
 function redraw_canvas(){
     console.log("Called redraw_canvas", Math.random());
@@ -262,14 +418,26 @@ function redraw_canvas(){
     ctx.fillStyle = square_boundary_color;
     for (ii = 0; ii < Math.pow(gs, 4) ; ii++){
         if (the_game.grid[ii] != ''){
-            const coords = pos_coords(the_game, ii);
-            const disk_center = get_disk_center(the_game, ii);
+            const coords = get_pos_coords(the_game, ii);
+            const disk_center = get_disk_center(ii);
             ctx.fillStyle = the_game.grid[ii] == 'w' ? 'white' : 'black';
 			circle(ctx, disk_center[0], disk_center[1], diskr);
             // console.log("coords", coords,"color", the_game.grid[ii]);
         }
     }
-
+	if (the_game.last_move >= 0){
+		ctx.fillStyle = the_game.pom == 'w' ? 'darkslategray': 'gainsboro';
+		let disk_center = get_disk_center(the_game.last_move);
+		circle(ctx, disk_center[0], disk_center[1], diskr);
+		the_game.last_captures.forEach(capture => {
+			for (ii = 1; ii <= capture[1]; ii++){
+				disk_center = get_disk_center(the_game.last_move + ii * capture[0]);
+				circle(ctx, disk_center[0], disk_center[1], diskr);
+			}
+		});
+	}
 }
+document.getElementById('btn_new_game').onclick = handle_new_game;
 canvas.onclick = handle_canvas_click;
+handle_new_game();
 redraw_canvas();
