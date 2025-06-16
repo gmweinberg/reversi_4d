@@ -124,7 +124,7 @@ class Spec {
 }
 
 class GameState {
-	constructor(mode, size){
+	constructor(mode, size, show_hints){
 		this.mode = mode;
 		this.done = false;
 		this.winner = null;
@@ -132,6 +132,7 @@ class GameState {
 		this.grid = Array(size * size * size * size).fill('');
 		this.last_move = -1;
 		this.last_captures = [];
+		this.show_hints = show_hints;
 		const strides = this.spec.straight_strides;
 		// put in initial pieces
 		const piece0 = sumArray(strides) * (size / 2 - 1);
@@ -200,19 +201,23 @@ const diskr = 7; // radius
 
 const square_boundary_color = "black";
 const square_color = "forestgreen";
+const hint_square_color = "palegreen";
 const plane_boundary_color = "dodgerblue";
-const win_color = "crimson";
 const last_move_color = "gold";
 
-function get_disk_center(pos){
+
+function get_square_corner(pos){
 	coords = get_pos_coords(pos);
 	let [y1, y2, x1, x2] = coords;
     const ps = pb + (the_game.spec.size) * sqs + (the_game.spec.size + 1) * sqb; // plane size
-    const x = pb + sqb + sqs / 2 + x1 * ps + (sqs + sqb) * x2;
-    const y = pb + sqb + sqs / 2 + y1 * ps + (sqs + sqb) * y2;
-	//console.log('get_disk_center', pos, coords, x, y);
+    const x = pb + sqb + x1 * ps + (sqs + sqb) * x2;
+    const y = pb + sqb + + y1 * ps + (sqs + sqb) * y2;
     return [x, y];
+}
 
+function get_disk_center(pos){
+	let [x, y] = get_square_corner(pos);
+	return [x + sqs/2, y + sqs / 2];
 }
 
 function circle(ctx, x, y, r){
@@ -371,8 +376,9 @@ async function do_computer_move(){
 function handle_new_game(){
         const mode = document.getElementById("frm").elements["mode"].value;
         const size = parseInt(document.getElementById("frm").elements["size"].value);
+        const hint = document.getElementById("frm").elements["hint"].checked;
         console.log("new game", mode);
-        the_game = new GameState(mode, size);
+        the_game = new GameState(mode, size, hint);
         if (mode == "pvc"){
             const player_color =  document.getElementById("frm").elements["color"].value;
             if (player_color == 'b'){
@@ -388,7 +394,8 @@ function handle_new_game(){
 
 function redraw_canvas(){
     console.log("Called redraw_canvas", Math.random());
-	const gs = the_game.spec.size
+	const gs = the_game.spec.size;
+	const tot = the_game.spec.total;
 	const cw = pb * (gs + 1) + sqb * (gs + 1) * gs + sqs * gs * gs;
 	canvas.width = cw;
 	canvas.height = cw;
@@ -414,6 +421,17 @@ function redraw_canvas(){
         y = ii * (pb + sqs * gs + sqb * (gs + 1));
         ctx.fillRect(0, y, canvas.width, pb);
     }
+	if (the_game.show_hints){
+		ctx.fillStyle = hint_square_color;
+		for (ii= 0; ii < tot; ii++){
+	        const [captures1, ng1] = get_captures(the_game.grid, ii, the_game.pom);
+            if (captures1.length===0) {
+                continue;
+            }
+			const [sqx, sqy] = get_square_corner(ii);
+			ctx.fillRect(sqx, sqy, sqs, sqs);
+	    }
+	}
     // disks
     ctx.fillStyle = square_boundary_color;
     for (ii = 0; ii < Math.pow(gs, 4) ; ii++){
