@@ -16,13 +16,14 @@
 				<label for="mode_pvp">PVP</label>
 				<input type="radio" name="mode" value="cvc" id="mode_cvc">
 				<label for="mode_cvc">CVC</label>
-                <span>Letter</span>
+				<input type="checkbox" name="hint" onchange="redraw_canvas()">
+				<label for="hint">show hints</label>
+				<br />
+                <span>Player Color</span>
 				<input type="radio" name="color" value="w" checked id="color_w">
 				<label for="color_w">white</label>
 				<input type="radio" name="color" value="b" id="color_b">
 				<label for="color_b">black</label>
-				<input type="checkbox" name="hint">
-				<label for="hint">show hints</label>
 				<br/>
 			    <button type="button" id="btn_undo">Undo</button>
 			    <button type="button" id="btn_new_game">New Game</button>
@@ -30,6 +31,7 @@
 				<a href="./help.html">help</a>
 				<br>
 				<canvas height="476" width="476" id="the_canvas"></canvas>
+				<p id="winner"></p>
 
 	        <script src="reversi.js">Javascript is disabled, this page will never work.</script>
 		</body>

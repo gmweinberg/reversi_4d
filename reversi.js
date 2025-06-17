@@ -78,8 +78,25 @@ function get_pos_coords(pos){ // most significant to least significant
     x2 = pos;
     return [y1, y2, x1, x2];
 }
+
+// helper function to make sure strides don't wrap coords across boundaries. That is,
+// a coord which is increasing with a stride must not decrease with 2 or more strides.
+
+function coords_no_wrap(pos, stride, steps){
+	const size = the_game.spec.size;
+    const pos_coords = get_pos_coords(pos);
+    const stride_coords = get_pos_coords(stride);
+    for (let ii =1; ii < pos_coords.length; ii++){
+        if (stride_coords[ii] === 1 && pos_coords[ii] + steps === size) return false;
+        if (stride_coords[ii] === -1 && steps > size) return false;
+    }
+    return true;
+}
+
+
+
 // Find all captures that can be made by placing a disk at the specified position.
-// captures are specied by a list of tupls (direction, length)
+// captures are specied by a list of tuplies (direction, length)
 // return the list and a new grid with the captures made. 
 // If there are no captures (or the square is occupied) the move is illegal.
 
@@ -94,8 +111,11 @@ function get_captures(grid, pos, pom) {
 	ng[pos] = pom;
     getAllStrideSums(spec.straight_strides).forEach((stride) =>{
 		let dpc = 0; //direction possible captures
-		let pos1 = pos + stride;
-		while (pos1 >= 0 && pos1 < spec.total){
+		let steps = 1;
+		//let pos1 = pos + stride;
+        while (coords_no_wrap(pos, stride, steps)){
+			const pos1 = pos + stride * steps;
+		//while (pos1 >= 0 && pos1 < spec.total){
 			if (grid[pos1] == pom){
 				if (dpc > 0){
 					captures.push([stride, dpc]);
@@ -109,7 +129,8 @@ function get_captures(grid, pos, pom) {
 			} else {
 				break;
 			}
-			pos1 += stride;
+			steps += 1;
+			//pos1 += stride;
 		}
 	});
 	return [captures, ng];
@@ -124,7 +145,7 @@ class Spec {
 }
 
 class GameState {
-	constructor(mode, size, show_hints){
+	constructor(mode, size){
 		this.mode = mode;
 		this.done = false;
 		this.winner = null;
@@ -132,7 +153,6 @@ class GameState {
 		this.grid = Array(size * size * size * size).fill('');
 		this.last_move = -1;
 		this.last_captures = [];
-		this.show_hints = show_hints;
 		const strides = this.spec.straight_strides;
 		// put in initial pieces
 		const piece0 = sumArray(strides) * (size / 2 - 1);
@@ -152,28 +172,28 @@ class GameState {
 
 		this.moves = [];
 		this.pom = 'w';
+		this.check_scores();
 	}
-	append_move(pos, captures, new_grid) {
-		this.last_move = pos;
-		this.last_captures = captures;
-		this.moves.push[pos, captures];
-		this.grid = new_grid;
-		the_game.toggle_pom();
+	check_scores(){
+		this.white = 0;
+		this.black = 0;
 		let net = 0;
-		let done = true;
-		for (let ii=0; ii < the_game.spec.total; ii++){
-			if (the_game.grid[ii] == ''){
-				done = false;
-				break;
+		this.done = true;
+		for (let ii=0; ii < this.spec.total; ii++){
+			if (this.grid[ii] == ''){
+				this.done = false;
 			}
-			if (the_game.grid[ii] == 'w'){
-				net += 1;
-			} else {
-				net -= 1;
+			if (this.grid[ii] == 'w'){
+				this.white += 1;
+			}
+			if (this.grid[ii] == 'b'){
+				this.black += 1;
 			}
 		}
-		if (done){
+		if (this.black === 0 || this.white === 0){
 			this.done = true;
+		}
+		if (this.done){
 			if (net > 0){
 				this.winner = 'w';
 			} else if (net < 0) {
@@ -182,6 +202,16 @@ class GameState {
 				this.winner = 'cat';
 			}
 		}
+
+	}
+	append_move(pos, captures, new_grid) {
+		this.last_move = pos;
+		this.last_captures = captures;
+		this.moves.push[pos, captures];
+		this.grid = new_grid;
+		this.toggle_pom();
+		this.check_scores();
+
 	}
 	toggle_pom() {
 		this.pom = other_player(this.pom);
@@ -371,14 +401,15 @@ async function do_computer_move(){
 	}
 }
 
-
+function should_show_hints(){
+	return document.getElementById("frm").elements["hint"].checked;
+}
 
 function handle_new_game(){
         const mode = document.getElementById("frm").elements["mode"].value;
         const size = parseInt(document.getElementById("frm").elements["size"].value);
-        const hint = document.getElementById("frm").elements["hint"].checked;
         console.log("new game", mode);
-        the_game = new GameState(mode, size, hint);
+        the_game = new GameState(mode, size);
         if (mode == "pvc"){
             const player_color =  document.getElementById("frm").elements["color"].value;
             if (player_color == 'b'){
@@ -386,8 +417,8 @@ function handle_new_game(){
                     do_computer_move();
             }
         } else if (mode == "cvc"){
-			console.log("not yet supported");
-            //do_computer_move();
+			//console.log("not yet supported");
+            do_computer_move();
         }
         redraw_canvas();
 }
@@ -421,7 +452,7 @@ function redraw_canvas(){
         y = ii * (pb + sqs * gs + sqb * (gs + 1));
         ctx.fillRect(0, y, canvas.width, pb);
     }
-	if (the_game.show_hints){
+	if (should_show_hints()){
 		ctx.fillStyle = hint_square_color;
 		for (ii= 0; ii < tot; ii++){
 	        const [captures1, ng1] = get_captures(the_game.grid, ii, the_game.pom);
@@ -454,6 +485,17 @@ function redraw_canvas(){
 			}
 		});
 	}
+	let score_text = "white: " + the_game.white + " black: " + the_game.black;
+	if (the_game.done){
+		if (the_game.winner === "w"){
+			score_text += " white won!";
+		} else if (the_game.winner === "b") {
+			score_text += " black won!";
+		} else {
+			score_text += " cat's game!";
+		}
+	}
+	document.getElementById("winner").innerHTML=score_text;
 }
 document.getElementById('btn_new_game').onclick = handle_new_game;
 canvas.onclick = handle_canvas_click;
