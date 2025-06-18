@@ -145,10 +145,12 @@ class Spec {
 }
 
 class GameState {
-	constructor(mode, size){
-		this.mode = mode;
+	constructor(size, black_player, white_player){
+		this.black_player = black_player;
+		this.white_player = white_player
 		this.done = false;
 		this.winner = null;
+		this.toroid = null;
 		this.spec = new Spec(size);
 		this.grid = Array(size * size * size * size).fill('');
 		this.last_move = -1;
@@ -221,7 +223,6 @@ class GameState {
 
 /* drawing the canvas */
 const canvas = document.getElementById('the_canvas');
-//const mode = document.getElementById("frm").elements["mode"].value;
 let the_game;
 
 const pb = 6; // boundary between planes
@@ -290,23 +291,17 @@ function handle_canvas_click(e) {
     if (the_game.computer_moving){
             return;
     }
-    if (the_game.mode == 'cvc'){
-            return;
-    }
     pos = get_click_square(e);
 	const [captures, ng] = get_captures(the_game.grid, pos, the_game.pom);
 	if (captures.length === 0){
 		console.log("illegal move");
 		return;
 	}
-	console.log("captures", captures);
+	//console.log("captures", captures);
 	the_game.append_move(pos, captures, ng); 
 	redraw_canvas();
 	if (the_game.done) return;
-	if (the_game.mode == 'pvc'){
-			do_computer_move();
-			redraw_canvas();
-	}
+	maybe_computer_move();
 
 	// console.log("handle_canvas_click", pos);
 }
@@ -320,17 +315,17 @@ function score_pos(pos) {
 	}
 	return 1;
 }
-/* score the grod from white's point of view */
+/* score the grid from white's point of view */
 function score_grid(grid) {
 	let total = 0;
 	for (let ii = 0; ii < the_game.spec.total; ii++){
 		if (grid[ii] == 'w'){
 			total += score_pos(ii);
 		} else if (grid[ii] == 'b'){
-			total -= score_pos[ii]; 
+			total -= score_pos(ii); 
 		} // no score if unoccupied
 	}
-	return total;
+	return total + Math.random();
 }
 
 function get_2ply_move(grid, pom){
@@ -346,7 +341,7 @@ function get_2ply_move(grid, pom){
 		if (captures1.length===0) {
 			continue;
 		}
-		them_min = 2000000; 
+		them_min = -2000000; 
 		for (let iii = 0; iii < the_game.spec.total; iii++){
 			const [captures2, ng2] = get_captures(ng1, iii, them);
 			if (captures2.length === 0){
@@ -369,7 +364,7 @@ function get_2ply_move(grid, pom){
 			tc = captures1;
 		}
 	}
-	console.log("tc", tc);
+	// console.log("tc", tc, "alpha", alpha);
     return maxpos;
 
 }
@@ -382,45 +377,57 @@ function resolveAfter20ms() {
   });
 }
 
+function maybe_computer_move(){
+	if (the_game.pom === "w"){
+		if (the_game.white_player != "human") {
+			 setTimeout(do_computer_move, 1000);
+		}
+	} else if (the_game.pom === "b") {
+		if (the_game.black_player != "human") {
+			 setTimeout(do_computer_move, 1000);
+		}
+	}
+}
+
 async function do_computer_move(){
-	console.log("computer moving");
+	console.log("computer moving", the_game.pom, the_game.white_player, the_game.black_player);
 	the_game.computer_moving = true;
 	await resolveAfter20ms();
 	//const computer_move = get_random_move(the_game.grid, the_game.pom);
 	const computer_move = get_2ply_move(the_game.grid, the_game.pom); // computer_move is just pos
 	const [captures, ng] = get_captures(the_game.grid, computer_move, the_game.pom);
-	console.log("got computer move", computer_move, captures);
+	// console.log("got computer move", computer_move, captures);
 	the_game.append_move(computer_move, captures, ng);
 	the_game.computer_moving = false;
-	console.log("computer moved", computer_move);
+	// console.log("computer moved", computer_move);
 	redraw_canvas();
-	if (the_game.mode == 'cvc'){
-			if (!the_game.done) {
-					setTimeout(do_computer_move, 1000);
-			}
-	}
+	maybe_computer_move();
 }
 
 function should_show_hints(){
 	return document.getElementById("frm").elements["hint"].checked;
 }
 
+function handle_toroid(){
+	the_game.toroid =  document.getElementById("frm").elements["toroid"].checked;
+}
+
+function handle_mode_change(){
+	the_game.black_player = document.getElementById("frm").elements["black_player"].value;
+	the_game.white_player = document.getElementById("frm").elements["white_player"].value;
+	console.log("handle_mode_change", the_game.white_player, the_game.black_player);
+	maybe_computer_move();
+}
+
 function handle_new_game(){
-        const mode = document.getElementById("frm").elements["mode"].value;
+        const black_player = document.getElementById("frm").elements["black_player"].value;
+        const white_player = document.getElementById("frm").elements["white_player"].value;
         const size = parseInt(document.getElementById("frm").elements["size"].value);
-        console.log("new game", mode);
-        the_game = new GameState(mode, size);
-        if (mode == "pvc"){
-            const player_color =  document.getElementById("frm").elements["color"].value;
-            if (player_color == 'b'){
-                    console.log("doing computer move.");
-                    do_computer_move();
-            }
-        } else if (mode == "cvc"){
-			//console.log("not yet supported");
-            do_computer_move();
-        }
-        redraw_canvas();
+        // console.log("new game");
+        the_game = new GameState(size, black_player, white_player);
+	    handle_toroid;
+	    redraw_canvas();
+	    maybe_computer_move();
 }
 
 function redraw_canvas(){

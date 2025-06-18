@@ -9,21 +9,25 @@
 					<option value="6">6</option>
 					<option value="8">8</option>
 				</select>
-				<span>Mode</span>
-				<input type="radio" name="mode" value="pvc"id="mode_pvc">
-				<label for="mode_pvc">PVC</label>
-				<input type="radio" name="mode" value="pvp" checked id="mode_pvp">
-				<label for="mode_pvp">PVP</label>
-				<input type="radio" name="mode" value="cvc" id="mode_cvc">
-				<label for="mode_cvc">CVC</label>
+				<input type="checkbox" name="toroid" onchange="handle_toroid()">
+				<label for="toroid">Torroidal</label>
 				<input type="checkbox" name="hint" onchange="redraw_canvas()">
 				<label for="hint">show hints</label>
 				<br />
-                <span>Player Color</span>
-				<input type="radio" name="color" value="w" checked id="color_w">
-				<label for="color_w">white</label>
-				<input type="radio" name="color" value="b" id="color_b">
-				<label for="color_b">black</label>
+				<span>White</span>
+				<select name="white_player" onchange="handle_mode_change()">
+					<option value="human">human</option>
+					<option value="random">random</option>
+					<option value="greedy">greedy</option>
+					<option value="2ply">2ply</option>
+				</select>
+				<span>Black</span>
+				<select name="black_player" onchange="handle_mode_change()">
+					<option value="human">human</option>
+					<option value="random">random</option>
+					<option value="greedy">greedy</option>
+					<option value="2ply">2ply</option>
+				</select>
 				<br/>
 			    <button type="button" id="btn_undo">Undo</button>
 			    <button type="button" id="btn_new_game">New Game</button>
