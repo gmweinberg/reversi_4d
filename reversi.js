@@ -215,14 +215,38 @@ class GameState {
 		}
 
 	}
-	append_move(pos, captures, new_grid) {
+	append_move(pos) {
+		const [captures, new_grid] = get_captures(this.grid, pos, this.pom);
 		this.last_move = pos;
 		this.last_captures = captures;
-		this.moves.push[pos, captures];
+		this.moves.push([pos, captures]);
 		this.grid = new_grid;
 		this.toggle_pom();
 		this.check_scores();
 
+	}
+	undo(){
+		console.log("calling undo, moves length", this.moves.length);
+		if (this.moves.length == 0) return;
+		const [pos, captures] = this.moves.pop();
+		console.log("pos", pos, "now", this.grid[pos], "captures", captures);
+		this.grid[pos] = '';
+		for (let ii = 0; ii < captures.length; ++ii){
+			const [stride, count] = captures[ii];
+			for (let jj = 1; jj <= count; jj++){
+				const where = pos + count * stride;
+				this.grid[where] = this.pom;
+			}
+		}
+		if (this.moves.length == 0){
+			this.last_move = -1;
+			this.last_captures = [];
+		} else {
+			const last = this.moves[this.moves.length - 1];
+			this.last_move = last[0], 
+			this.last_captures = [...last[1]];
+		}
+		this.toggle_pom();
 	}
 	toggle_pom() {
 		this.pom = other_player(this.pom);
@@ -434,9 +458,8 @@ async function do_computer_move(){
 	//const computer_move = get_random_move(the_game.grid, the_game.pom);
 	const fun = get_computer_function();
 	const computer_move = fun(the_game.grid, the_game.pom); // computer_move is just the pos
-	const [captures, ng] = get_captures(the_game.grid, computer_move, the_game.pom);
 	// console.log("got computer move", computer_move, captures);
-	the_game.append_move(computer_move, captures, ng);
+	the_game.append_move(computer_move);
 	the_game.computer_moving = false;
 	// console.log("computer moved", computer_move);
 	redraw_canvas();
@@ -457,7 +480,7 @@ function handle_canvas_click(e) {
 		return;
 	}
 	//console.log("captures", captures);
-	the_game.append_move(pos, captures, ng); 
+	the_game.append_move(pos); 
 	redraw_canvas();
 	if (the_game.done) return;
 	maybe_computer_move();
@@ -478,6 +501,15 @@ function handle_mode_change(){
 	the_game.white_player = document.getElementById("frm").elements["white_player"].value;
 	console.log("handle_mode_change", the_game.white_player, the_game.black_player);
 	maybe_computer_move();
+}
+
+/* in human vs computer go back 2 ply. In human vs human go back 1 */
+function handle_undo(){
+	the_game.undo();
+	if (the_game.white_player != "human" || the_game.black_player != "human"){
+		the_game.undo();
+	}
+	redraw_canvas();
 }
 
 function handle_new_game(){
@@ -573,6 +605,7 @@ function redraw_canvas(){
 	document.getElementById("winner").innerHTML=score_text;
 }
 document.getElementById('btn_new_game').onclick = handle_new_game;
+document.getElementById('btn_undo').onclick = handle_undo;
 canvas.onclick = handle_canvas_click;
 handle_new_game();
 redraw_canvas();
