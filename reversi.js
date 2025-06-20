@@ -62,12 +62,12 @@ function other_player(pom){
 }
 
 function grid_pos(y1, y2, x1, x2){
-	const strides = the_game.spec.straight_strides;
+	const strides = the_spec.straight_strides;
     return y1 * strides[3] + y2 * strides[2] + x1 * strides[1] + x2;
 }
 
 function get_pos_coords(pos){ // most significant to least significant
-	const strides = the_game.spec.straight_strides;
+	const strides = the_spec.straight_strides;
     let x1, x2, y1, y2;
     y1 = Math.floor(pos/strides[3]);
     pos -= y1 * strides[3];
@@ -83,7 +83,7 @@ function get_pos_coords(pos){ // most significant to least significant
 // a coord which is increasing with a stride must not decrease with 2 or more strides.
 
 function coords_no_wrap(pos, stride, steps){
-	const size = the_game.spec.size;
+	const size = the_spec.size;
     const pos_coords = get_pos_coords(pos);
     const stride_coords = get_pos_coords(stride);
     for (let ii =1; ii < pos_coords.length; ii++){
@@ -101,7 +101,6 @@ function coords_no_wrap(pos, stride, steps){
 // If there are no captures (or the square is occupied) the move is illegal.
 
 function get_captures(grid, pos, pom) {
-	const spec = the_game.spec;
 	const captures = [];
 	const ng = [...grid];
 	if (grid[pos] != '') {
@@ -109,7 +108,7 @@ function get_captures(grid, pos, pom) {
 	}
 		//this.straight_strides.forEach((element) => this.grid[piece0 + element] = 'b');
 	ng[pos] = pom;
-    getAllStrideSums(spec.straight_strides).forEach((stride) =>{
+    getAllStrideSums(the_spec.straight_strides).forEach((stride) =>{
 		let dpc = 0; //direction possible captures
 		let steps = 1;
 		//let pos1 = pos + stride;
@@ -145,17 +144,17 @@ class Spec {
 }
 
 class GameState {
-	constructor(size, black_player, white_player){
+	constructor(black_player, white_player){
+		const size = the_spec.size;
 		this.black_player = black_player;
 		this.white_player = white_player
 		this.done = false;
 		this.winner = null;
 		this.toroid = null;
-		this.spec = new Spec(size);
 		this.grid = Array(size * size * size * size).fill('');
 		this.last_move = -1;
 		this.last_captures = [];
-		const strides = this.spec.straight_strides;
+		const strides = the_spec.straight_strides;
 		// put in initial pieces
 		const piece0 = sumArray(strides) * (size / 2 - 1);
 		this.grid[piece0] = 'w';
@@ -179,9 +178,8 @@ class GameState {
 	check_scores(){
 		this.white = 0;
 		this.black = 0;
-		let net = 0;
 		this.done = true;
-		for (let ii=0; ii < this.spec.total; ii++){
+		for (let ii=0; ii < the_spec.total; ii++){
 			if (this.grid[ii] == ''){
 				this.done = false;
 			}
@@ -195,10 +193,21 @@ class GameState {
 		if (this.black === 0 || this.white === 0){
 			this.done = true;
 		}
+		let any_captures = false;
+		for (let ii=0; ii < the_spec.total; ii++){
+			const [captures, ng] = get_captures(this.grid, ii, this.pom);
+			if (captures.length > 0){
+				any_captures = true;
+				break
+			}
+		}
+		if (!any_captures){
+			this.done = true;
+		}
 		if (this.done){
-			if (net > 0){
+			if (this.white > this.black){
 				this.winner = 'w';
-			} else if (net < 0) {
+			} else if (this.black > this.white) {
 				this.winner =  'b';
 			} else {
 				this.winner = 'cat';
@@ -224,6 +233,7 @@ class GameState {
 /* drawing the canvas */
 const canvas = document.getElementById('the_canvas');
 let the_game;
+let the_spec;
 
 const pb = 6; // boundary between planes
 const sqb = 2; // boundary between squares
@@ -240,7 +250,7 @@ const last_move_color = "gold";
 function get_square_corner(pos){
 	coords = get_pos_coords(pos);
 	let [y1, y2, x1, x2] = coords;
-    const ps = pb + (the_game.spec.size) * sqs + (the_game.spec.size + 1) * sqb; // plane size
+    const ps = pb + (the_spec.size) * sqs + (the_spec.size + 1) * sqb; // plane size
     const x = pb + sqb + x1 * ps + (sqs + sqb) * x2;
     const y = pb + sqb + + y1 * ps + (sqs + sqb) * y2;
     return [x, y];
@@ -262,7 +272,7 @@ function circle(ctx, x, y, r){
  * or -1 */
 
 function get_click_square(e) {
-    const ps = pb + the_game.spec.size * sqs + (the_game.spec.size + 1) * sqb; // plane size
+    const ps = pb + the_spec.size * sqs + (the_spec.size + 1) * sqb; // plane size
     const rect = canvas.getBoundingClientRect();
     const canX = Math.floor(e.clientX - rect.left);
     const canY = Math.floor(e.clientY - rect.top);
@@ -282,6 +292,155 @@ function get_click_square(e) {
     const pos =  grid_pos( planeY, sqY, planeX, sqX);
     // console.log("coords", planeX, sqX, planeY, sqY, pos);
     return pos;
+}
+
+/* evaluation score for a particular square. For now we score extra for the
+ * 16 corners and everything else is the same
+ */
+function score_pos(pos) {
+	const pos_coords = get_pos_coords(pos);
+	if (pos_coords.every(elm => elm === 0 || elm === the_spec.size - 1)){
+		return 100;
+	}
+	return 1;
+}
+/* score the grid from white's point of view */
+function score_grid(grid) {
+	let total = 0;
+	for (let ii = 0; ii < the_spec.total; ii++){
+		if (grid[ii] == 'w'){
+			total += score_pos(ii);
+		} else if (grid[ii] == 'b'){
+			total -= score_pos(ii); 
+		} // no score if unoccupied
+	}
+	return total + Math.random();
+}
+
+function get_random_move(grid, pom){
+	let best = 0;
+	let move = null;
+	let temp;
+    for (let ii = 0; ii < the_spec.total; ii++){
+        // const [captures, ng] = get_captures(the_game.grid, pos, the_game.pom);
+        const [captures1, ng1] = get_captures(grid, ii, pom);
+        if (captures1.length===0) {
+            continue;
+        }
+		temp = Math.random();
+		if (temp > best){
+			best = temp;
+			move = ii;
+		}
+	}
+	return move;
+}
+
+function get_greedy_move(grid, pom){
+	let best = 0;
+	let move = null;
+	let ascore;
+    for (let ii = 0; ii < the_spec.total; ii++){
+        // const [captures, ng] = get_captures(the_game.grid, pos, the_game.pom);
+        const [captures1, ng1] = get_captures(grid, ii, pom);
+        if (captures1.length===0) {
+            continue;
+        }
+		ascore = score_grid(ng1) +  Math.random();
+		if (pom == 'b'){
+			ascore *= -1;
+		}
+		if (ascore > best){
+			best = ascore;
+			move = ii;
+		}
+
+	}
+	//console.log("get_greedy_move move", move, "score", score);
+	return move;
+}
+
+function get_2ply_move(grid, pom){
+	const them = other_player(pom);
+	let alpha = -20000000000;  
+	let maxpos;
+	let them_min;
+	let ascore;
+	let tc;
+	for (let ii = 0; ii < the_spec.total; ii++){
+		// const [captures, ng] = get_captures(the_game.grid, pos, the_game.pom);
+		const [captures1, ng1] = get_captures(grid, ii, pom);
+		if (captures1.length===0) {
+			continue;
+		}
+		them_min = 2000000; 
+		for (let iii = 0; iii < the_spec.total; iii++){
+			const [captures2, ng2] = get_captures(ng1, iii, them);
+			if (captures2.length === 0){
+				continue;
+			}
+			ascore = score_grid(ng2);
+			if (pom === 'b'){
+				ascore *= -1;
+			}
+			them_min = Math.min(them_min, ascore);
+			if (alpha >= them_min){
+				break;
+			} 
+		}
+		if (them_min > alpha){
+			alpha = them_min;
+			maxpos = ii;
+			tc = captures1;
+		}
+	}
+	console.log("tc", tc, "alpha", alpha);
+    return maxpos;
+}
+
+function resolveAfter20ms() {
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      resolve('resolved');
+    }, 20);
+  });
+}
+
+function maybe_computer_move(){
+	if (the_game.done) return;
+	if (the_game.pom === "w"){
+		if (the_game.white_player != "human") {
+			 setTimeout(do_computer_move, 1000);
+		}
+	} else if (the_game.pom === "b") {
+		if (the_game.black_player != "human") {
+			 setTimeout(do_computer_move, 1000);
+		}
+	}
+}
+
+function get_computer_function(){
+	const comp_player = the_game.pom == "w" ? the_game.white_player : the_game.black_player;
+	if (comp_player == "random") return get_random_move;
+	if (comp_player == "2ply") return get_2ply_move;
+	if (comp_player == "greedy") return get_greedy_move;
+    console.log("get_computer_function this should never happen");
+}
+
+async function do_computer_move(){
+	console.log("computer moving", the_game.pom, the_game.white_player, the_game.black_player);
+	the_game.computer_moving = true;
+	await resolveAfter20ms();
+	//const computer_move = get_random_move(the_game.grid, the_game.pom);
+	const fun = get_computer_function();
+	const computer_move = fun(the_game.grid, the_game.pom); // computer_move is just the pos
+	const [captures, ng] = get_captures(the_game.grid, computer_move, the_game.pom);
+	// console.log("got computer move", computer_move, captures);
+	the_game.append_move(computer_move, captures, ng);
+	the_game.computer_moving = false;
+	// console.log("computer moved", computer_move);
+	redraw_canvas();
+	maybe_computer_move();
 }
 
 function handle_canvas_click(e) {
@@ -305,104 +464,6 @@ function handle_canvas_click(e) {
 
 	// console.log("handle_canvas_click", pos);
 }
-/* evaluation score for a particular square. For now we score extra for the
- * 16 corners and everything else is the same
- */
-function score_pos(pos) {
-	const pos_coords = get_pos_coords(pos);
-	if (pos_coords.every(elm => elm === 0 || elm === the_game.spec.size)){
-		return 20;
-	}
-	return 1;
-}
-/* score the grid from white's point of view */
-function score_grid(grid) {
-	let total = 0;
-	for (let ii = 0; ii < the_game.spec.total; ii++){
-		if (grid[ii] == 'w'){
-			total += score_pos(ii);
-		} else if (grid[ii] == 'b'){
-			total -= score_pos(ii); 
-		} // no score if unoccupied
-	}
-	return total + Math.random();
-}
-
-function get_2ply_move(grid, pom){
-	const them = other_player(pom);
-	let alpha = -20000000000;  
-	let maxpos;
-	let them_min;
-	let ascore;
-	let tc;
-	for (let ii = 0; ii < the_game.spec.total; ii++){
-		// const [captures, ng] = get_captures(the_game.grid, pos, the_game.pom);
-		const [captures1, ng1] = get_captures(grid, ii, pom);
-		if (captures1.length===0) {
-			continue;
-		}
-		them_min = -2000000; 
-		for (let iii = 0; iii < the_game.spec.total; iii++){
-			const [captures2, ng2] = get_captures(ng1, iii, them);
-			if (captures2.length === 0){
-				continue;
-			}
-			ascore = score_grid(ng2);
-			if (pom === 'w'){
-				ascore *= -1;
-			}
-			if (ascore > them_min){
-				them_min = ascore;
-			}
-			if (ascore < alpha){
-				continue;
-			} 
-		}
-		if (them_min > alpha){
-			alpha = them_min;
-			maxpos = ii;
-			tc = captures1;
-		}
-	}
-	// console.log("tc", tc, "alpha", alpha);
-    return maxpos;
-
-}
-
-function resolveAfter20ms() {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve('resolved');
-    }, 20);
-  });
-}
-
-function maybe_computer_move(){
-	if (the_game.pom === "w"){
-		if (the_game.white_player != "human") {
-			 setTimeout(do_computer_move, 1000);
-		}
-	} else if (the_game.pom === "b") {
-		if (the_game.black_player != "human") {
-			 setTimeout(do_computer_move, 1000);
-		}
-	}
-}
-
-async function do_computer_move(){
-	console.log("computer moving", the_game.pom, the_game.white_player, the_game.black_player);
-	the_game.computer_moving = true;
-	await resolveAfter20ms();
-	//const computer_move = get_random_move(the_game.grid, the_game.pom);
-	const computer_move = get_2ply_move(the_game.grid, the_game.pom); // computer_move is just pos
-	const [captures, ng] = get_captures(the_game.grid, computer_move, the_game.pom);
-	// console.log("got computer move", computer_move, captures);
-	the_game.append_move(computer_move, captures, ng);
-	the_game.computer_moving = false;
-	// console.log("computer moved", computer_move);
-	redraw_canvas();
-	maybe_computer_move();
-}
 
 function should_show_hints(){
 	return document.getElementById("frm").elements["hint"].checked;
@@ -424,7 +485,8 @@ function handle_new_game(){
         const white_player = document.getElementById("frm").elements["white_player"].value;
         const size = parseInt(document.getElementById("frm").elements["size"].value);
         // console.log("new game");
-        the_game = new GameState(size, black_player, white_player);
+	    the_spec = new Spec(size);
+        the_game = new GameState(black_player, white_player);
 	    handle_toroid;
 	    redraw_canvas();
 	    maybe_computer_move();
@@ -432,8 +494,8 @@ function handle_new_game(){
 
 function redraw_canvas(){
     console.log("Called redraw_canvas", Math.random());
-	const gs = the_game.spec.size;
-	const tot = the_game.spec.total;
+	const gs = the_spec.size;
+	const tot = the_spec.total;
 	const cw = pb * (gs + 1) + sqb * (gs + 1) * gs + sqs * gs * gs;
 	canvas.width = cw;
 	canvas.height = cw;
