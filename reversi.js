@@ -242,9 +242,9 @@ const diskr = 7; // radius
 
 const square_boundary_color = "black";
 const square_color = "forestgreen";
+const last_move_color = "magenta";
 const hint_square_color = "palegreen";
 const plane_boundary_color = "dodgerblue";
-const last_move_color = "gold";
 
 
 function get_square_corner(pos){
@@ -532,6 +532,12 @@ function redraw_canvas(){
 			ctx.fillRect(sqx, sqy, sqs, sqs);
 	    }
 	}
+	ctx.fillStyle = last_move_color;
+	if (the_game.last_move >=  0){
+	    const [lmx, lmy] = get_square_corner(the_game.last_move);
+		ctx.fillRect(lmx, lmy, sqs, sqs);
+	}
+
     // disks
     ctx.fillStyle = square_boundary_color;
     for (ii = 0; ii < Math.pow(gs, 4) ; ii++){
