@@ -161,7 +161,7 @@ function get_captures(grid, pos, pom, srsly) {
 		let dpc = 0; //direction possible captures
 		let steps = 1;
 		//let pos1 = pos + stride;
-		const pos_fun = pos_no_wrap;
+		const pos_fun = the_spec.toroid ? pos_wrap : pos_no_wrap;
 		let final_pos = pos_fun(pos, strides, steps);
         while (final_pos >= 0){
 		//while (pos1 >= 0 && pos1 < spec.total){
@@ -529,7 +529,7 @@ function should_show_hints(){
 }
 
 function handle_toroid(){
-	spec.toroid =  document.getElementById("frm").elements["toroid"].checked;
+	the_spec.toroid =  document.getElementById("frm").elements["toroid"].checked;
 }
 
 function handle_mode_change(){
