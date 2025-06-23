@@ -66,7 +66,7 @@ function grid_pos(y1, y2, x1, x2){
     return y1 * strides[3] + y2 * strides[2] + x1 * strides[1] + x2;
 }
 
-function get_pos_coords(pos){ // most significant to least significant
+function get_pos_coords(pos){ // least significant to most significant
 	const strides = the_spec.straight_strides;
     let x1, x2, y1, y2;
     y1 = Math.floor(pos/strides[3]);
@@ -76,21 +76,68 @@ function get_pos_coords(pos){ // most significant to least significant
     x1 = Math.floor(pos / strides[1]);
     pos -= x1 * strides[1];
     x2 = pos;
-    return [y1, y2, x1, x2];
+    return [x2, x1, y2, y1];
 }
+
+function get_stride_combos() {
+    const values = [0, 1, -1];
+    const result = [];
+
+    // Generate all combinations using nested loops
+    for (let i = 0; i < values.length; i++) {
+        for (let j = 0; j < values.length; j++) {
+            for (let k = 0; k < values.length; k++) {
+                for (let l = 0; l < values.length; l++) {
+                    const combination = [values[i], values[j], values[k], values[l]];
+
+                    // Skip [0, 0, 0, 0]
+                    if (combination.every(val => val === 0)) {
+                        continue;
+                    }
+
+                    result.push(combination);
+                }
+            }
+        }
+    }
+
+    return result;
+}
+
 
 // helper function to make sure strides don't wrap coords across boundaries. That is,
 // a coord which is increasing with a stride must not decrease with 2 or more strides.
 
-function coords_no_wrap(pos, stride, steps){
-	const size = the_spec.size;
+function pos_no_wrap(pos, strides, steps){
+    const size = the_spec.size;
     const pos_coords = get_pos_coords(pos);
-    const stride_coords = get_pos_coords(stride);
-    for (let ii =1; ii < pos_coords.length; ii++){
-        if (stride_coords[ii] === 1 && pos_coords[ii] + steps === size) return false;
-        if (stride_coords[ii] === -1 && steps > size) return false;
+    let total = 0;
+
+    for (let ii = 0; ii < pos_coords.length; ii++){
+        //console.log("ii", ii, "strides[ii]", strides[ii], "steps", steps);
+        if (strides[ii] === 1 && pos_coords[ii] + steps === size) return -1;
+        if (strides[ii] === -1 && steps > pos_coords[ii]) return -1;
+        total += the_spec.straight_strides[ii] * strides[ii] * steps;
     }
-    return true;
+    return pos + total;
+}
+
+function pos_wrap(pos, strides, steps){
+    const size = the_spec.size;
+    const pos_coords = get_pos_coords(pos);
+    let total = 0;
+
+    for (let ii = 0; ii < pos_coords.length; ii++){
+        //console.log("ii", ii, "strides[ii]", strides[ii], "steps", steps);
+        if (strides[ii] === 1 && pos_coords[ii] + steps >= size) {
+            total -= the_spec.straight_strides[ii] * size;
+        }
+        if (strides[ii] === -1 && steps > pos_coords[ii]){
+            total += the_spec.straight_strides[ii] * size;
+        }
+        total += the_spec.straight_strides[ii] * strides[ii] * steps;
+    }
+    return pos + total;
 }
 
 
@@ -100,7 +147,7 @@ function coords_no_wrap(pos, stride, steps){
 // return the list and a new grid with the captures made. 
 // If there are no captures (or the square is occupied) the move is illegal.
 
-function get_captures(grid, pos, pom) {
+function get_captures(grid, pos, pom, srsly) {
 	const captures = [];
 	const ng = [...grid];
 	if (grid[pos] != '') {
@@ -108,30 +155,35 @@ function get_captures(grid, pos, pom) {
 	}
 		//this.straight_strides.forEach((element) => this.grid[piece0 + element] = 'b');
 	ng[pos] = pom;
-    getAllStrideSums(the_spec.straight_strides).forEach((stride) =>{
+	all_strides = get_stride_combos();
+	for (let ii = 0; ii < all_strides.length; ii++){
+		const strides = all_strides[ii];
 		let dpc = 0; //direction possible captures
 		let steps = 1;
 		//let pos1 = pos + stride;
-        while (coords_no_wrap(pos, stride, steps)){
-			const pos1 = pos + stride * steps;
+		const pos_fun = pos_no_wrap;
+		let final_pos = pos_fun(pos, strides, steps);
+        while (final_pos >= 0){
 		//while (pos1 >= 0 && pos1 < spec.total){
-			if (grid[pos1] == pom){
+			if (grid[final_pos] == pom){
 				if (dpc > 0){
-					captures.push([stride, dpc]);
 					for (let i = 1; i<= dpc; i++){
-						ng[pos + stride * i] = pom;
+						const pos_cap = pos_fun(pos, strides, i);
+						captures.push(pos_cap);
+						ng[pos_cap] = pom;
 					}
 				}
 				break;
-			} else if (grid[pos1] == other_player(pom)){
+			} else if (grid[final_pos] == other_player(pom)){
 				dpc++;
 			} else {
 				break;
 			}
 			steps += 1;
+			final_pos = pos_fun(pos, strides, steps);
 			//pos1 += stride;
 		}
-	});
+	}
 	return [captures, ng];
 }
 
@@ -139,6 +191,7 @@ class Spec {
     constructor(size){
         this.size = size; //along one axis
         this.total = Math.pow(size, 4);
+		this.toroid = document.getElementById("frm").elements["toroid"].checked;;
         this.straight_strides = [1, size, size * size, size * size * size];
 	}
 }
@@ -150,10 +203,7 @@ class GameState {
 		this.white_player = white_player
 		this.done = false;
 		this.winner = null;
-		this.toroid = null;
 		this.grid = Array(size * size * size * size).fill('');
-		this.last_move = -1;
-		this.last_captures = [];
 		const strides = the_spec.straight_strides;
 		// put in initial pieces
 		const piece0 = sumArray(strides) * (size / 2 - 1);
@@ -216,9 +266,7 @@ class GameState {
 
 	}
 	append_move(pos) {
-		const [captures, new_grid] = get_captures(this.grid, pos, this.pom);
-		this.last_move = pos;
-		this.last_captures = captures;
+		const [captures, new_grid] = get_captures(this.grid, pos, this.pom, true);
 		this.moves.push([pos, captures]);
 		this.grid = new_grid;
 		this.toggle_pom();
@@ -232,19 +280,7 @@ class GameState {
 		console.log("pos", pos, "now", this.grid[pos], "captures", captures);
 		this.grid[pos] = '';
 		for (let ii = 0; ii < captures.length; ++ii){
-			const [stride, count] = captures[ii];
-			for (let jj = 1; jj <= count; jj++){
-				const where = pos + count * stride;
-				this.grid[where] = this.pom;
-			}
-		}
-		if (this.moves.length == 0){
-			this.last_move = -1;
-			this.last_captures = [];
-		} else {
-			const last = this.moves[this.moves.length - 1];
-			this.last_move = last[0], 
-			this.last_captures = [...last[1]];
+			this.grid[captures.ii] = this.pom;
 		}
 		this.toggle_pom();
 	}
@@ -273,7 +309,7 @@ const plane_boundary_color = "dodgerblue";
 
 function get_square_corner(pos){
 	coords = get_pos_coords(pos);
-	let [y1, y2, x1, x2] = coords;
+	let [x2, x1, y2, y1] = coords;
     const ps = pb + (the_spec.size) * sqs + (the_spec.size + 1) * sqb; // plane size
     const x = pb + sqb + x1 * ps + (sqs + sqb) * x2;
     const y = pb + sqb + + y1 * ps + (sqs + sqb) * y2;
@@ -493,7 +529,7 @@ function should_show_hints(){
 }
 
 function handle_toroid(){
-	the_game.toroid =  document.getElementById("frm").elements["toroid"].checked;
+	spec.toroid =  document.getElementById("frm").elements["toroid"].checked;
 }
 
 function handle_mode_change(){
@@ -537,6 +573,7 @@ function redraw_canvas(){
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     let ii, iii;
     let x, y;
+	// draw background
     ctx.fillStyle = square_boundary_color;
     for (ii = 0; ii < gs + 1; ii++){
             for (iii = 0; iii < gs + 1; iii++){
@@ -565,8 +602,9 @@ function redraw_canvas(){
 	    }
 	}
 	ctx.fillStyle = last_move_color;
-	if (the_game.last_move >=  0){
-	    const [lmx, lmy] = get_square_corner(the_game.last_move);
+	if (the_game.moves.length > 0){
+		const last_move = the_game.moves[the_game.moves.length - 1][0];
+	    const [lmx, lmy] = get_square_corner(last_move);
 		ctx.fillRect(lmx, lmy, sqs, sqs);
 	}
 
@@ -581,15 +619,15 @@ function redraw_canvas(){
             // console.log("coords", coords,"color", the_game.grid[ii]);
         }
     }
-	if (the_game.last_move >= 0){
+	if (the_game.moves.length > 0){
+		captures = the_game.moves[the_game.moves.length - 1][1];
+		// console.log("captures", captures);
 		ctx.fillStyle = the_game.pom == 'w' ? 'darkslategray': 'gainsboro';
 		let disk_center = get_disk_center(the_game.last_move);
 		circle(ctx, disk_center[0], disk_center[1], diskr);
-		the_game.last_captures.forEach(capture => {
-			for (ii = 1; ii <= capture[1]; ii++){
-				disk_center = get_disk_center(the_game.last_move + ii * capture[0]);
-				circle(ctx, disk_center[0], disk_center[1], diskr);
-			}
+		captures.forEach(capture => {
+			disk_center = get_disk_center(the_game.last_move + ii * capture[0]);
+			circle(ctx, disk_center[0], disk_center[1], diskr);
 		});
 	}
 	let score_text = "white: " + the_game.white + " black: " + the_game.black;
