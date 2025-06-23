@@ -625,8 +625,9 @@ function redraw_canvas(){
 		ctx.fillStyle = the_game.pom == 'w' ? 'darkslategray': 'gainsboro';
 		let disk_center = get_disk_center(the_game.last_move);
 		circle(ctx, disk_center[0], disk_center[1], diskr);
+		console.log("captures", captures);
 		captures.forEach(capture => {
-			disk_center = get_disk_center(the_game.last_move + ii * capture[0]);
+			disk_center = get_disk_center(capture);
 			circle(ctx, disk_center[0], disk_center[1], diskr);
 		});
 	}

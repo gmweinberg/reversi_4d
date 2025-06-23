@@ -3,15 +3,33 @@
 		<title>Reversi 4D help</title>
 </head>
 <body>
+	<h1> Reversi 4D</h1>
+	    <h2>Intro</h2>
 		<p>Reversi is a game invented in the 1800s, you have these coins tat are black on one side
 		   and whit on the other. It's better known by the same name as the Shakespear play with the Moor,
 		   but I cannot call it by that name since it is trademarked.</p>
 		<p>Reversi in 4 dimensions works much like the 2d version except there are many more directions
-		(4 linear dimensions, plus diagonals os 2, 3, and 4 dimensions in combination).
-		The 4 dimesnions are rpresented on a 2d screen as grid of planar slices.
-		We support PVP
+		(4 linear dimensions, plus diagonals of 2, 3, and 4 dimensions in combination).
+		The 4 dimesnions are represented on a 2d screen as grid of planar slices. So the presentation
+		is just like 3-d represented in 2-d, except we slice twice instead of once.
+		We support PVP,
 		(on the same computer, take turns), PVC, or if you're realy bored you can watch the computer play vs itself.
-		There is currently no netwrok support. You can play with a side length of 4, 6, or 8.
+		There is currently no network support. You can play with a side length of 4, 6, or 8.
 		</p>
+		<p>The "hints" checkbox will show all legal moves in a position. The last move made 
+		has a magenta background, and pieces captured on the most recent move are slightly grey to make
+		it a little more clear what just happened. Sorry, no fancy animations.
+		<h2>Toroid</h2>
+		<p>If you click the toroid option you can play on a hypertoroid instead of a tesseract.
+		In plain English, that just means the dimensions all wrap.
+		<h2> Computer Players </h2>
+		<p>There are 3 computer players, all verys simplistic. The "random" just makes any random legal move,
+		"greedy" mostly just takes as many pieces as it can on the move, "2ply" is similar but it looks 2 ply deep.
+		On the tesseract version the computer tries really hard to grab the 16 corner squares, but in the torid
+		version all squares are equivalent so strategy is nonexistent. That is, I can't tell the computer how
+		to recognize a good position because I don't know myself.
+		<h2>Future Expansion</h2>
+		<p> If you want to try playing on larger boards, just add more entries to the drop down.</p>
+
 </body>
 </html>
