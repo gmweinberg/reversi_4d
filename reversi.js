@@ -359,6 +359,7 @@ function get_click_square(e) {
  */
 function score_pos(pos) {
 	const pos_coords = get_pos_coords(pos);
+	if (the_spec.toroid) return 1;
 	if (pos_coords.every(elm => elm === 0 || elm === the_spec.size - 1)){
 		return 100;
 	}
